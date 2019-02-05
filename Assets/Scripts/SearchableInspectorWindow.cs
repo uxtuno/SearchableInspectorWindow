@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEditor;
 using System.Reflection;
 using System.IO;
+using UnityEditorInternal;
 
 
 /// <summary>
@@ -18,22 +19,62 @@ public class SearchableInspectorWindow : EditorWindow
 		GetWindow<SearchableInspectorWindow>();
 	}
 
+    struct EditorInfo
+    {
+        public EditorInfo(Editor editor, bool foldout)
+        {
+            this.editor = editor;
+            this.foldout = foldout;
+        }
+
+        public Editor editor;
+        public bool foldout;
+    }
+
 	Vector2 scrollPosition;
-	List<Editor> editors = new List<Editor>();
+	List<EditorInfo> editors = new List<EditorInfo>();
 
 	void OnEnable()
 	{
 		Selection.selectionChanged += () => {
 			rebuildEditorElements();
 		};
+
+        EditorApplication.update += () => {
+            // 定期的に監視し、変化があれば表示を更新
+            if (checkSelectionGameObjectEditted()) {
+                rebuildEditorElements();
+            }
+        };
 	}
 
-	void rebuildEditorElements()
-	{
-		if (!Selection.activeGameObject) {
-			return;
-		}
+    IEnumerable<Component> cachedSelectionGameObjectsComponents;
 
+    /// <summary>
+    /// 選択中のゲームオブジェクトの状態に何らかの変化があればtrueを返す
+    /// この関数の内部でゲームオブジェクトの状態をキャッシュする
+    /// </summary>
+    /// <returns></returns>
+    bool checkSelectionGameObjectEditted()
+    {
+        IEnumerable<Component> selectionGameObjectsComponents = new Component[0];
+        foreach (var item in Selection.gameObjects) {
+            selectionGameObjectsComponents = selectionGameObjectsComponents.Concat(item.GetComponents<Component>());
+        }
+
+        var result = false;
+        if (cachedSelectionGameObjectsComponents != null && cachedSelectionGameObjectsComponents.SequenceEqual(selectionGameObjectsComponents)) {
+            result = false;
+        } else {
+            result = true;
+        }
+
+        cachedSelectionGameObjectsComponents = selectionGameObjectsComponents;
+        return result;
+    }
+
+    void rebuildEditorElements()
+	{
 		editors.Clear();
 
 		var editingComponents = new Dictionary<GameObject, Component>();
@@ -44,6 +85,7 @@ public class SearchableInspectorWindow : EditorWindow
 		}
 
 		if (activeObjectComponents == null) {
+            Repaint();
 			return;
 		}
 		var sameTypeObjectList = new List<List<Object>>();
@@ -58,8 +100,8 @@ public class SearchableInspectorWindow : EditorWindow
 			sameTypeObjectList.Add(new List<Object>());
 			sameTypeObjectList[i].Add(activeObjectComponents[i]);
 
-			foreach (GameObject selectObject in Selection.objects) {
-				if (!selectObject || selectObject == Selection.activeGameObject) {
+			foreach (var selectObject in Selection.gameObjects) {
+				if (selectObject == Selection.activeGameObject) {
 					continue;
 				}
 
@@ -77,12 +119,15 @@ public class SearchableInspectorWindow : EditorWindow
 			}
 		}
 
-		foreach (var components in sameTypeObjectList.Where(components => components.Count == Selection.objects.Length)) {
-			editors.Add(Editor.CreateEditor(components.ToArray()));
+		foreach (var components in sameTypeObjectList.Where(components => components.Count == Selection.gameObjects.Length)) {
+            var editorInfo = new EditorInfo(Editor.CreateEditor(components.ToArray()), true);
+            editors.Add(editorInfo);
 		}
 
 		Repaint();
 	}
+
+    string searchText;
 
 	private void OnGUI()
 	{
@@ -94,36 +139,69 @@ public class SearchableInspectorWindow : EditorWindow
 			return;
 		}
 
-		var requiredUpdate = false; // 状態更新が必要か
+        EditorGUILayout.Separator();
+        EditorGUILayout.PrefixLabel("Search Text");
+        searchText = EditorGUILayout.TextField(searchText);
+        EditorGUILayout.Separator();
 
-		using (var scrollScope = new EditorGUILayout.ScrollViewScope(scrollPosition)) {
-			foreach (var item in editors) {
+        if (!string.IsNullOrEmpty(searchText)) {
+            using (var scrollScope = new EditorGUILayout.ScrollViewScope(scrollPosition)) {
+                for (int i = 0; i < editors.Count; ++i) {
+                    var editor = editors[i].editor;
 
-				using (var changeCheck = new EditorGUI.ChangeCheckScope()) {
-					if (item.target == null) {
-						requiredUpdate = true;
-						continue;
-					}
+                    if (editor.target == null) {
+                        continue;
+                    }
 
-					var foldout = EditorGUILayout.InspectorTitlebar(true, item);
+                    var serializedObject = new SerializedObject(editor.targets);
 
-					if (item.GetType().CustomAttributes.Any(attribute => attribute.AttributeType == typeof(CanEditMultipleObjects))) {
-						item.OnInspectorGUI();
-					}
-					else if (item.targets.Length == 1) {
-						item.OnInspectorGUI();
-					}
-					else {
-						EditorGUILayout.HelpBox("Multi-object editing not supported.", MessageType.Info);
-					}
+                    var foldout = EditorGUILayout.InspectorTitlebar(editors[i].foldout, editor);
+                    if (!!foldout) {
+                        var iterator = serializedObject.GetIterator();
+                        iterator.Next(true);
+                        while (iterator.NextVisible(false)) {
+                            Debug.Log(iterator.propertyType);
+                            if (iterator.name.IndexOf(searchText, System.StringComparison.CurrentCultureIgnoreCase) >= 0) {
+                                EditorGUILayout.PropertyField(iterator, true);
+                            }
+                        }
+                    }
 
-					if (!!changeCheck.changed) {
-						rebuildEditorElements();
-					}
-				}
-			}
+                    editors[i] = new EditorInfo(editor, foldout);
+                }
+                scrollPosition = scrollScope.scrollPosition;
+            }
+            return;
+        }
 
-			scrollPosition = scrollScope.scrollPosition;
+        using (var scrollScope = new EditorGUILayout.ScrollViewScope(scrollPosition)) {
+            for (int i = 0; i < editors.Count; ++i) {
+                var editor = editors[i].editor;
+
+                if (editor.target == null) {
+                    continue;
+                }
+
+                using (var changeCheck = new EditorGUI.ChangeCheckScope()) {
+                    var foldout = EditorGUILayout.InspectorTitlebar(editors[i].foldout, editor);
+
+                    if (!!foldout) {
+                        if (editor.GetType().CustomAttributes.Any(attribute => attribute.AttributeType == typeof(CanEditMultipleObjects))) {
+                            editor.OnInspectorGUI();
+                        } else if (editor.targets.Length == 1) {
+                            editor.OnInspectorGUI();
+                        } else {
+                            EditorGUILayout.HelpBox("Multi-object editing not supported.", MessageType.Info);
+                        }
+                    }
+
+                    editors[i] = new EditorInfo(editor, foldout);
+                }
+            }
+
+            EditorGUILayout.Separator();
+
+            scrollPosition = scrollScope.scrollPosition;
 		}
 
 		if (Event.current.type == EventType.DragUpdated ||
@@ -136,23 +214,11 @@ public class SearchableInspectorWindow : EditorWindow
 					var filename =  Path.GetFileNameWithoutExtension(item);
 					var addType = System.Type.GetType(filename);
 
-					foreach (GameObject selectObject in Selection.objects) {
-						if (!selectObject) {
-							continue;
-						}
-
-						selectObject.AddComponent(addType);
-						Undo.RegisterCompleteObjectUndo(selectObject, "Add Component");
+					foreach (GameObject selectObject in Selection.gameObjects) {
+						Undo.AddComponent(selectObject, addType);
 					}
-
 				}
-
-				requiredUpdate = true;
 			}
-		}
-
-		if (!!requiredUpdate) {
-			rebuildEditorElements();
 		}
 	}
 }
