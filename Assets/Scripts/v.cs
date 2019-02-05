@@ -4,6 +4,7 @@ using UnityEngine;
 
 public class v : MonoBehaviour
 {
+    public Quaternion a;
     // Start is called before the first frame update
     void Start()
     {
