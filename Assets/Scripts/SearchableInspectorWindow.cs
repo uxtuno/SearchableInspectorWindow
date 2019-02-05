@@ -25,10 +25,12 @@ public class SearchableInspectorWindow : EditorWindow
         {
             this.editor = editor;
             this.foldout = foldout;
+            this.serializedObject = new SerializedObject(editor.targets);
         }
 
         public Editor editor;
         public bool foldout;
+        public SerializedObject serializedObject;
     }
 
 	Vector2 scrollPosition;
@@ -153,14 +155,11 @@ public class SearchableInspectorWindow : EditorWindow
                         continue;
                     }
 
-                    var serializedObject = new SerializedObject(editor.targets);
-
                     var foldout = EditorGUILayout.InspectorTitlebar(editors[i].foldout, editor);
                     if (!!foldout) {
-                        var iterator = serializedObject.GetIterator();
+                        var iterator = editors[i].serializedObject.GetIterator();
                         iterator.Next(true);
                         while (iterator.NextVisible(false)) {
-                            Debug.Log(iterator.propertyType);
                             if (iterator.name.IndexOf(searchText, System.StringComparison.CurrentCultureIgnoreCase) >= 0) {
                                 EditorGUILayout.PropertyField(iterator, true);
                             }
@@ -171,6 +170,9 @@ public class SearchableInspectorWindow : EditorWindow
                 }
                 scrollPosition = scrollScope.scrollPosition;
             }
+
+            Repaint();
+
             return;
         }
 
