@@ -13,10 +13,11 @@ using UnityEditorInternal;
 /// </summary>
 public class SearchableInspectorWindow : EditorWindow
 {
-	[MenuItem("Window/Searchable Inspector")]
+	[MenuItem("Window/Searchable Inspector %i")]
 	static void showWindow()
 	{
-		GetWindow<SearchableInspectorWindow>();
+		var window = GetWindow<SearchableInspectorWindow>();
+		window.onEnabledFirstTiming = true;
 	}
 
 	/// <summary>
@@ -40,6 +41,11 @@ public class SearchableInspectorWindow : EditorWindow
 	List<EditorInfo> editors = new List<EditorInfo>();
 
 	/// <summary>
+	/// Window が有効になってから、GUI を初めて更新するまでの間 true
+	/// </summary>
+	bool onEnabledFirstTiming;
+
+	/// <summary>
 	/// 選択中ゲームオブジェクト自体の Editor
 	/// </summary>
 	Editor selectObjectEditor;
@@ -54,6 +60,7 @@ public class SearchableInspectorWindow : EditorWindow
 		};
 
 		EditorApplication.update += observeContentsChanged;
+		onEnabledFirstTiming = true;
 	}
 
 	void OnDisable()
@@ -191,8 +198,17 @@ public class SearchableInspectorWindow : EditorWindow
 			return;
 		}
 
+		if (onEnabledFirstTiming) {
+			if (Event.current.type == EventType.Repaint) {
+				EditorGUI.FocusTextInControl("SearchTextField");
+				onEnabledFirstTiming = false;
+			}
+		}
+
 		EditorGUILayout.LabelField("Search Text");
+		GUI.SetNextControlName("SearchTextField");
 		searchText = EditorGUILayout.TextField(searchText);
+
 		EditorGUILayout.Separator();
 
 		if (!string.IsNullOrEmpty(searchText)) {
