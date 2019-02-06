@@ -119,15 +119,19 @@ public class SearchableInspectorWindow : EditorWindow
 		}
 		var sameTypeObjectList = new List<List<Object>>();
 
+
 		for (int i = 0; i < activeObjectComponents.Length; ++i) {
+			if (activeObjectComponents[i] == null) {
+				continue;
+			}
 
 			var typeSameIndex = activeObjectComponents
-				.Where(item => item.GetType() == activeObjectComponents[i].GetType()) // 同一の型で絞り込み
+				.Where(item => item != null && item.GetType() == activeObjectComponents[i].GetType()) // 同一の型で絞り込み
 				.Select((item, index) => new { item, index }) // インデックスを取得可能にする
 				.First(item => item.item == activeObjectComponents[i]).index; // インデックス取得
 
 			sameTypeObjectList.Add(new List<Object>());
-			sameTypeObjectList[i].Add(activeObjectComponents[i]);
+			sameTypeObjectList[sameTypeObjectList.Count - 1].Add(activeObjectComponents[i]);
 
 			foreach (var selectObject in Selection.gameObjects) {
 				if (selectObject == Selection.activeGameObject) {
@@ -137,7 +141,7 @@ public class SearchableInspectorWindow : EditorWindow
 				var components = selectObject.GetComponents<Component>();
 
 				var sameComponent = components
-					.Where(item => item.GetType() == activeObjectComponents[i].GetType()) // 同一の型で絞り込み
+					.Where(item => item != null && item.GetType() == activeObjectComponents[i].GetType()) // 同一の型で絞り込み
 					.Select((item, index) => new { item, index }) // インデックスを取得可能にする
 					.Where(item => item.index == typeSameIndex) // 同一型のコンポーネントのリストから特定インデックスの要素を取り出す
 					.FirstOrDefault()?.item; // 単一要素として取得
@@ -215,9 +219,6 @@ public class SearchableInspectorWindow : EditorWindow
 				}
 				scrollPosition = scrollScope.scrollPosition;
 			}
-
-			Repaint();
-
 			return;
 		}
 
