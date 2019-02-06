@@ -225,6 +225,8 @@ public class SearchableInspectorWindow : EditorWindow
 					}
 
 					var foldout = EditorGUILayout.InspectorTitlebar(editors[i].foldout, editor);
+
+					++EditorGUI.indentLevel;
 					if (!!foldout) {
 						EditorGUIUtility.labelWidth = 0;
 						editors[i].serializedObject.Update();
@@ -239,6 +241,8 @@ public class SearchableInspectorWindow : EditorWindow
 						editors[i].serializedObject.ApplyModifiedProperties();
 					}
 
+					--EditorGUI.indentLevel;
+
 					editors[i] = new EditorInfo(editor, foldout);
 				}
 				scrollPosition = scrollScope.scrollPosition;
@@ -248,6 +252,7 @@ public class SearchableInspectorWindow : EditorWindow
 
 		using (var scrollScope = new EditorGUILayout.ScrollViewScope(scrollPosition)) {
 			drawComponents();
+
 			EditorGUILayout.Separator();
 
 			Component[] activeObjectComponents = null;
@@ -293,6 +298,7 @@ public class SearchableInspectorWindow : EditorWindow
 			using (var changeCheck = new EditorGUI.ChangeCheckScope()) {
 				var foldout = EditorGUILayout.InspectorTitlebar(editors[i].foldout, editor);
 
+				++EditorGUI.indentLevel;
 				if (!!foldout) {
 					if (editor.GetType().CustomAttributes.Any(attribute => attribute.AttributeType == typeof(CanEditMultipleObjects))) {
 						editor.OnInspectorGUI();
@@ -304,6 +310,7 @@ public class SearchableInspectorWindow : EditorWindow
 						EditorGUILayout.HelpBox("Multi-object editing not supported.", MessageType.Info);
 					}
 				}
+				--EditorGUI.indentLevel;
 
 				editors[i] = new EditorInfo(editor, foldout);
 			}
