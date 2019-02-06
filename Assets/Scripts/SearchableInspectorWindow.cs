@@ -239,9 +239,11 @@ public class SearchableInspectorWindow : EditorWindow
 		if (Event.current.type == EventType.DragUpdated ||
 			Event.current.type == EventType.DragPerform) {
 
-			DragAndDrop.visualMode = DragAndDropVisualMode.Move;
+			DragAndDrop.visualMode = DragAndDropVisualMode.Link;
 
 			if (Event.current.type == EventType.DragPerform) {
+				DragAndDrop.AcceptDrag();
+
 				foreach (var item in DragAndDrop.paths) {
 					var filename = Path.GetFileNameWithoutExtension(item);
 					var addType = System.Type.GetType(filename);
