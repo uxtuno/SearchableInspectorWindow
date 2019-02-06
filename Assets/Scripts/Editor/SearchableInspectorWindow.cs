@@ -171,6 +171,8 @@ public class SearchableInspectorWindow : EditorWindow
 
 	private void OnGUI()
 	{
+		EditorGUIUtility.labelWidth = 0.0f;
+
 		if (!!selectObjectEditor) {
 			selectObjectEditor.DrawHeader();
 		}
@@ -183,6 +185,8 @@ public class SearchableInspectorWindow : EditorWindow
 		// GameObject 以外のアセット類を選択した際の挙動
 		if (!Selection.activeGameObject) {
 			// 既定の内容を描画するのみ
+			EditorGUIUtility.labelWidth = 0;
+
 			selectObjectEditor.OnInspectorGUI();
 			return;
 		}
@@ -222,6 +226,9 @@ public class SearchableInspectorWindow : EditorWindow
 
 					var foldout = EditorGUILayout.InspectorTitlebar(editors[i].foldout, editor);
 					if (!!foldout) {
+						EditorGUIUtility.labelWidth = 0;
+						editors[i].serializedObject.Update();
+
 						var iterator = editors[i].serializedObject.GetIterator();
 						iterator.Next(true);
 						while (iterator.NextVisible(false)) {
@@ -229,6 +236,7 @@ public class SearchableInspectorWindow : EditorWindow
 								EditorGUILayout.PropertyField(iterator, true);
 							}
 						}
+						editors[i].serializedObject.ApplyModifiedProperties();
 					}
 
 					editors[i] = new EditorInfo(editor, foldout);
