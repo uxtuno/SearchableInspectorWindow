@@ -42,7 +42,7 @@ public class SearchableInspectorWindow : EditorWindow
 	/// <summary>
 	/// 選択中ゲームオブジェクト自体の Editor
 	/// </summary>
-	Editor gameObjectEditor;
+	Editor selectObjectEditor;
 
 	void OnEnable()
 	{
@@ -106,7 +106,7 @@ public class SearchableInspectorWindow : EditorWindow
 		editors.Clear();
 
 		// ヘッダの描画用
-		gameObjectEditor = Editor.CreateEditor(Selection.gameObjects);
+		selectObjectEditor = Editor.CreateEditor(Selection.objects);
 
 		Component[] activeObjectComponents = null;
 		if (!!Selection.activeGameObject) {
@@ -160,16 +160,31 @@ public class SearchableInspectorWindow : EditorWindow
 
 	private void OnGUI()
 	{
+		if (!!selectObjectEditor) {
+			selectObjectEditor.DrawHeader();
+		}
+
+		// 表示するものが無い場合 return
+		if (editors == null || !selectObjectEditor) {
+			return;
+		}
+
+		// GameObject 以外のアセット類を選択した際の挙動
 		if (!Selection.activeGameObject) {
+			// 既定の内容を描画するのみ
+			selectObjectEditor.OnInspectorGUI();
 			return;
 		}
 
-		if (editors == null) {
-			return;
-		}
+		// プレハブアセットの場合、Open Prefabボタンを表示する
+		if (PrefabUtility.GetPrefabAssetType(Selection.activeGameObject) != PrefabAssetType.NotAPrefab && !PrefabUtility.IsPartOfPrefabInstance(Selection.activeGameObject)) {
+			selectObjectEditor.OnInspectorGUI();
 
-		if (!!gameObjectEditor) {
-			gameObjectEditor.DrawHeader();
+			if (GUILayout.Button("Open Prefab")) {
+				// プレハブ編集モードを開く
+				AssetDatabase.OpenAsset(Selection.activeGameObject);
+			}
+			return;
 		}
 
 		EditorGUILayout.LabelField("Search Text");
