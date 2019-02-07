@@ -69,30 +69,10 @@ public class SearchableInspectorWindow : EditorWindow
 		editorTracker.RebuildIfNecessary();
 	}
 
-	double lastRenderedTime;
-	private void Update()
-	{
-		Editor[] editors = editorTracker.activeEditors;
-		if (editors == null)
-			return;
-
-		bool wantsRepaint = false;
-		foreach (var myEditor in editors) {
-			if (myEditor.RequiresConstantRepaint())
-				wantsRepaint = true;
-		}
-
-		if (wantsRepaint && lastRenderedTime + 0.033 < EditorApplication.timeSinceStartup) {
-			lastRenderedTime = EditorApplication.timeSinceStartup;
-			Repaint();
-		}
-	}
-
 	void OnInspectorUpdate()
 	{
 		// 定期的に監視し、変化があれば表示を更新
 		if (checkSelectionGameObjectEditted()) {
-			Debug.Log("Dirty");
 			rebuildEditorElements();
 		}
 	}
@@ -142,8 +122,6 @@ public class SearchableInspectorWindow : EditorWindow
 
 	private void OnGUI()
 	{
-		Debug.Log("Draw GUI");
-
 		if (Event.current.type == EventType.Repaint) {
 			editorTracker.ClearDirty();
 		}
