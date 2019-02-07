@@ -26,9 +26,10 @@ public class SearchableInspectorWindow : EditorWindow
 		return editorTracker.isDirty;
 	}
 
-	Assembly gameAssembly = Assembly.Load("Assembly-CSharp");
+	Assembly gameAssembly;
+	Assembly unityEditorAssembly;
 
-	ActiveEditorTracker editorTracker;
+    ActiveEditorTracker editorTracker;
 	bool isLocked;
 
 	/// <summary>
@@ -69,15 +70,18 @@ public class SearchableInspectorWindow : EditorWindow
 		editorTracker = new ActiveEditorTracker();
 		editorTracker.isLocked = isLocked;
 		editorTracker.RebuildIfNecessary();
-	}
+
+        gameAssembly = Assembly.Load("Assembly-CSharp");
+        unityEditorAssembly = Assembly.Load("UnityEditor");
+    }
 
 	void OnInspectorUpdate()
 	{
 		// 定期的に監視し、変化があれば表示を更新
 		if (checkSelectionGameObjectEditted()) {
-			rebuildEditorElements();
-		}
-	}
+            Repaint();
+        }
+    }
 
 	void OnDisable()
 	{
@@ -101,39 +105,42 @@ public class SearchableInspectorWindow : EditorWindow
 		return isDirty();
 	}
 
-	void rebuildEditorElements()
-	{
-		// ヘッダの描画用
-		selectObjectEditor = Editor.CreateEditor(Selection.objects);
+    void rebuildEditorElements()
+    {
+        // ヘッダの描画用
+        selectObjectEditor = Editor.CreateEditor(Selection.objects);
 
-		// GCが高頻度で発生する事になるので、チューニング対象
-		var newActiveEditorTable = new Dictionary<Editor, EditorInfo>();
-		foreach (var editor in editorTracker.activeEditors) {
-			if (activeEditorTable.ContainsKey(editor)) {
-				newActiveEditorTable.Add(editor, new EditorInfo(editor, activeEditorTable[editor].foldout));
-			} else {
-				newActiveEditorTable.Add(editor, new EditorInfo(editor, true));
-			}
-		}
-		activeEditorTable = newActiveEditorTable;
-
-		Repaint();
-	}
+        // GCが高頻度で発生する事になるので、チューニング対象
+        var newActiveEditorTable = new Dictionary<Editor, EditorInfo>();
+        foreach (var editor in editorTracker.activeEditors) {
+            if (activeEditorTable.ContainsKey(editor)) {
+                newActiveEditorTable.Add(editor, new EditorInfo(editor, activeEditorTable[editor].foldout));
+            } else {
+                newActiveEditorTable.Add(editor, new EditorInfo(editor, true));
+            }
+        }
+        activeEditorTable = newActiveEditorTable;
+    }
 
 	string searchText;
 
 	private void OnGUI()
 	{
-		if (Event.current.type == EventType.Repaint) {
-			editorTracker.ClearDirty();
-		}
+        switch (Event.current.type) {
+            case EventType.Repaint:
+                editorTracker.ClearDirty();
+                break;
+            case EventType.Layout: // レイアウト再計算のため、状態更新。
+                rebuildEditorElements();
+                break;
+        }
 
-		if (!!selectObjectEditor) {
+        if (!!selectObjectEditor) {
 			selectObjectEditor.DrawHeader();
 		}
 
-		// 表示するものが無い場合 return
-		if (activeEditorTable == null ||
+        // 表示するものが無い場合 return
+        if (activeEditorTable == null ||
 			editorTracker.activeEditors.Length == 0||
 			!selectObjectEditor) {
 			return;
@@ -214,13 +221,10 @@ public class SearchableInspectorWindow : EditorWindow
 	/// </summary>
 	void drawComponents()
 	{
-		var temp = new Dictionary<Editor, EditorInfo>();
+        var temp = new Dictionary<Editor, EditorInfo>();
 		int count = 0;
-		foreach (var item in activeEditorTable.Keys) {
-
-			var editor = item;
-
-			if (editor == null ||
+		foreach (var editor in editorTracker.activeEditors) {
+            if (editor == null ||
 				editor.target == null ||
 				editor.target is GameObject) {
 				continue;
@@ -232,7 +236,7 @@ public class SearchableInspectorWindow : EditorWindow
 
 			++EditorGUI.indentLevel;
 			if (!!foldout) {
-				EditorGUIUtility.labelWidth = Screen.width * 0.4f;
+				EditorGUIUtility.labelWidth = Screen.width * 0.4f; // 0.4は調整値
 				drawComponentInspector(editor);
 			}
 			--EditorGUI.indentLevel;
@@ -248,16 +252,18 @@ public class SearchableInspectorWindow : EditorWindow
 	/// <param name="componentEditor">表示するコンポーネントのEditor</param>
 	void drawComponentInspector(Editor componentEditor)
 	{
-		// 検索ボックスに何も入力していない時のコンポーネント表示
-		if (string.IsNullOrEmpty(searchText)) {
-			if (componentEditor.GetType().CustomAttributes.Any(attribute => attribute.AttributeType == typeof(CanEditMultipleObjects))) {
+        if (Event.current.type == EventType.Repaint) {
+            typeof(Editor).GetProperty("isInspectorDirty", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(componentEditor, false);
+        }
+        
+        // 検索ボックスに何も入力していない時のコンポーネント表示
+        if (string.IsNullOrEmpty(searchText)) {
+			if (componentEditor.GetType().CustomAttributes.Any(attribute => attribute.AttributeType == typeof(CanEditMultipleObjects)) ||
+                componentEditor.GetType() == unityEditorAssembly.GetType("UnityEditor.GenericInspector")) {
 				componentEditor.OnInspectorGUI();
 			}
 			else if (componentEditor.targets.Length == 1) {
 				componentEditor.OnInspectorGUI();
-			}
-			else {
-				EditorGUILayout.HelpBox("Multi-object editing not supported.", MessageType.Info);
 			}
 		} else {
 			// 検索ボックスに入力されたテキストに応じて、プロパティをフィルタリングして表示
