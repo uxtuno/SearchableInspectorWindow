@@ -26,6 +26,8 @@ public class SearchableInspectorWindow : EditorWindow
 		return editorTracker.isDirty;
 	}
 
+	Assembly gameAssembly = Assembly.Load("Assembly-CSharp");
+
 	ActiveEditorTracker editorTracker;
 	bool isLocked;
 
@@ -196,7 +198,8 @@ public class SearchableInspectorWindow : EditorWindow
 
 				foreach (var item in DragAndDrop.paths) {
 					var filename = Path.GetFileNameWithoutExtension(item);
-					var addType = System.Type.GetType(filename);
+					
+					var addType = gameAssembly.GetType(filename);
 
 					foreach (GameObject selectObject in Selection.gameObjects) {
 						Undo.AddComponent(selectObject, addType);
