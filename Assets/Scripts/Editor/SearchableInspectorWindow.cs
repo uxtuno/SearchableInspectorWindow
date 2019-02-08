@@ -405,6 +405,15 @@ public class SearchableInspectorWindow : EditorWindow
 				}
 			}
 
+			if (!!propertyInfo.showAllChildren) {
+				GUI.color = Color.yellow;
+				var lastRect = GUILayoutUtility.GetLastRect();
+				lastRect.x = 1.0f;
+				lastRect.xMax = lastRect.x + 5.0f;
+				GUI.Box(lastRect, "");
+				GUI.color = defaultColor;
+			}
+
 			oldDepth = propertyInfo.propery.depth;
 		}
 
