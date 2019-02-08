@@ -47,6 +47,25 @@ public class SearchableInspectorWindow : EditorWindow
 		public SerializedObject serializedObject;
 	}
 
+	/// <summary>
+	/// プロパティをどのように表示するか
+	/// </summary>
+	struct ShowPropertyInfo
+	{
+		public ShowPropertyInfo(SerializedProperty property, bool showChildren)
+		{
+			this.propery = property;
+			this.showAllChildren = showChildren;
+		}
+
+		public SerializedProperty propery;
+
+		/// <summary>
+		/// 全ての子プロパティを表示するか
+		/// </summary>
+		public bool showAllChildren;
+	}
+
 	Vector2 scrollPosition;
 	Dictionary<Editor, EditorInfo> activeEditorTable = new Dictionary<Editor, EditorInfo>();
 
@@ -62,6 +81,15 @@ public class SearchableInspectorWindow : EditorWindow
 
 	GUIStyle lineStyle;
 
+	private MethodInfo getHandlerMethodInfo;
+	private static object[] getHandlerParams;
+
+	private object handler;
+
+	private PropertyInfo propertyDrawerInfo;
+	private MethodInfo guiHandler;
+	private object[] guiParams;
+
 	void OnEnable()
 	{
 		// ウインドウタイトル変更
@@ -75,7 +103,9 @@ public class SearchableInspectorWindow : EditorWindow
 
         gameAssembly = Assembly.Load("Assembly-CSharp");
         unityEditorAssembly = Assembly.Load("UnityEditor");
-    }
+
+		getHandlerMethodInfo = System.Type.GetType("UnityEditor.ScriptAttributeUtility, UnityEditor").GetMethod("GetHandler", BindingFlags.NonPublic | BindingFlags.Static);
+	}
 
 	void OnInspectorUpdate()
 	{
@@ -87,7 +117,7 @@ public class SearchableInspectorWindow : EditorWindow
 
 	void OnDisable()
 	{
-		if (editorTracker != null && editorTracker.activeEditors != null) {
+		if (editorTracker != null && editorTracker.activeEditors != null && editorTracker.activeEditors[0] != null) {
 			editorTracker.Destroy();
 		}
 	}
@@ -252,11 +282,14 @@ public class SearchableInspectorWindow : EditorWindow
 			var foldout = EditorGUILayout.InspectorTitlebar(activeEditorTable[editor].foldout, editor);
 
 			++EditorGUI.indentLevel;
+
 			if (!!foldout) {
 				EditorGUIUtility.labelWidth = Screen.width * 0.4f; // 0.4は調整値
 				drawComponentInspector(editor);
 			}
+
 			--EditorGUI.indentLevel;
+
 
 			temp.Add(editor, new EditorInfo(editor, foldout));
 		}
@@ -287,16 +320,96 @@ public class SearchableInspectorWindow : EditorWindow
 			var componentSerializedObject = activeEditorTable[componentEditor].serializedObject;
 			componentSerializedObject.Update();
 
-			var iterator = componentSerializedObject.GetIterator();
-			iterator.Next(true);
-			while (iterator.NextVisible(false)) {
-				if (iterator.name.IndexOf(searchText, System.StringComparison.CurrentCultureIgnoreCase) >= 0) {
-					EditorGUILayout.PropertyField(iterator, true);
-				}
-			}
+			var propertyIterator = componentSerializedObject.GetIterator();
+
+			var viewProperties = new List<ShowPropertyInfo>();
+			buildFileredProperties(propertyIterator, false, viewProperties);
+			drawProperties(viewProperties);
 
 			componentSerializedObject.ApplyModifiedProperties();
 		}
+	}
+
+	bool buildFileredProperties(SerializedProperty iterator, bool forceDraw, List<ShowPropertyInfo> outViewProperties)
+	{
+		// 一階層潜る
+		if (!iterator.NextVisible(true)) {
+			return false;
+		}
+
+		var oldDepth = iterator.depth;
+		if (oldDepth >= 2) {
+			++EditorGUI.indentLevel;
+		}
+
+		var viewCount = 0;
+
+		do {
+			var handler = getHandlerMethodInfo.Invoke(null, new object[1] { iterator });
+			var type = handler.GetType();
+			propertyDrawerInfo = type.GetProperty("hasPropertyDrawer", BindingFlags.Public | BindingFlags.Instance);
+
+			bool isFoldout = true;
+
+			if (iterator.name.IndexOf(searchText, System.StringComparison.CurrentCultureIgnoreCase) >= 0) {
+				outViewProperties.Add(new ShowPropertyInfo(iterator.Copy(), true));
+				++viewCount;
+				continue;
+			}
+
+			var currentPosition = outViewProperties.Count;
+			if (!!iterator.hasVisibleChildren && isFoldout && iterator.propertyType == SerializedPropertyType.Generic) {
+				var childIterator = iterator.Copy();
+				if (buildFileredProperties(childIterator, false, outViewProperties)) {
+					outViewProperties.Insert(currentPosition, new ShowPropertyInfo(iterator.Copy(), false));
+					++viewCount;
+				}
+			}
+		} while (iterator.NextVisible(false) && oldDepth == iterator.depth);
+
+		if (oldDepth >= 2) {
+			--EditorGUI.indentLevel;
+		}
+
+		return viewCount > 0;
+	}
+
+	void drawProperties(List<ShowPropertyInfo> properties)
+	{
+		if (properties.Count == 0) {
+			return;
+		}
+
+		int oldDepth = properties[0].propery.depth;
+		var collapsedDepth = 99;
+		var collapsed = false;
+		var defaultIndentLevel = EditorGUI.indentLevel;
+		var defaultColor = GUI.color;
+		foreach (var propertyInfo in properties) {
+			if (propertyInfo.propery.depth > oldDepth) {
+				++EditorGUI.indentLevel;
+			}
+
+			if (propertyInfo.propery.depth < oldDepth) {
+				--EditorGUI.indentLevel;
+			}
+
+			if (!!collapsed && propertyInfo.propery.depth <= collapsedDepth) {
+				collapsed = false;
+			}
+
+			if (!collapsed) {
+				if (!EditorGUILayout.PropertyField(propertyInfo.propery, propertyInfo.showAllChildren)) {
+					collapsedDepth = propertyInfo.propery.depth;
+					collapsed = true;
+				}
+			}
+
+			oldDepth = propertyInfo.propery.depth;
+		}
+
+		EditorGUI.indentLevel = defaultIndentLevel;
+		GUI.color = defaultColor;
 	}
 
 	void ShowButton(Rect rect)
