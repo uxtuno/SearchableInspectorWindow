@@ -117,7 +117,7 @@ public class SearchableInspectorWindow : EditorWindow
 
 	void OnDisable()
 	{
-		if (editorTracker != null && editorTracker.activeEditors != null && editorTracker.activeEditors[0] != null) {
+		if (editorTracker != null && editorTracker.activeEditors != null && editorTracker.activeEditors.Length > 0 && editorTracker.activeEditors[0] != null) {
 			editorTracker.Destroy();
 		}
 	}
