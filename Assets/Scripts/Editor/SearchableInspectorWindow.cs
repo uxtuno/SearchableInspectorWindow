@@ -60,6 +60,8 @@ public class SearchableInspectorWindow : EditorWindow
 	/// </summary>
 	Editor selectObjectEditor;
 
+	GUIStyle lineStyle;
+
 	void OnEnable()
 	{
 		// ウインドウタイトル変更
@@ -85,7 +87,7 @@ public class SearchableInspectorWindow : EditorWindow
 
 	void OnDisable()
 	{
-		if (editorTracker != null) {
+		if (editorTracker != null && editorTracker.activeEditors != null) {
 			editorTracker.Destroy();
 		}
 	}
@@ -178,7 +180,8 @@ public class SearchableInspectorWindow : EditorWindow
 
 		searchText = EditorGUILayout.TextField(searchText);
 
-		EditorGUILayout.Separator();
+		EditorGUILayout.Space();
+		drawSeparator();
 
 		using (var scrollScope = new EditorGUILayout.ScrollViewScope(scrollPosition)) {
 			drawComponents();
@@ -191,6 +194,9 @@ public class SearchableInspectorWindow : EditorWindow
 			}
 
 			//EditorGUILayout.HelpBox("Components that are only on same of the selected objects cannot be multi-edited.", MessageType.None);
+
+			drawSeparator();
+			EditorGUILayout.Space();
 
 			scrollPosition = scrollScope.scrollPosition;
 		}
@@ -214,6 +220,17 @@ public class SearchableInspectorWindow : EditorWindow
 				}
 			}
 		}
+	}
+
+	void drawSeparator()
+	{
+		lineStyle = new GUIStyle("box");
+		lineStyle.border.top = lineStyle.border.bottom = 1;
+		lineStyle.margin.top = lineStyle.margin.bottom = 1;
+		lineStyle.padding.top = lineStyle.padding.bottom = 1;
+		lineStyle.margin.left = lineStyle.margin.right = 0;
+		lineStyle.padding.left = lineStyle.padding.right = 0;
+		GUILayout.Box(GUIContent.none, lineStyle, GUILayout.ExpandWidth(true), GUILayout.Height(1f));
 	}
 
 	/// <summary>
