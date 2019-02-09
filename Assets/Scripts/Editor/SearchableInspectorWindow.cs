@@ -342,8 +342,8 @@ public class SearchableInspectorWindow : EditorWindow
 		}
 		activeEditorTable = temp;
 
-		drawSeparator();
 		if (!!isHideSomeComponent) {
+			drawSeparator();
 			EditorGUILayout.HelpBox("Several components are hidden.", MessageType.Info);
 		}
 	}
