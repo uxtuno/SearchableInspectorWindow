@@ -110,6 +110,13 @@ public class SearchableInspectorWindow : EditorWindow
 	/// </summary>
 	System.Type genericInspectorType;
 
+	/// <summary>
+	/// 検索ボックスのスタイル
+	/// </summary>
+	GUIStyle toolbarSearchFieldStyle;
+	GUIStyle toolbarSearchFieldCancelButtonStyle;
+	GUIStyle toolbarSearchFieldCancelButtonEmptyStyle;
+
 	void OnEnable()
 	{
 		// ウインドウタイトル変更
@@ -184,6 +191,16 @@ public class SearchableInspectorWindow : EditorWindow
 
 	private void OnGUI()
 	{
+		if (toolbarSearchFieldStyle == null) {
+			toolbarSearchFieldStyle = GetStyle("ToolbarSeachTextField");
+		}
+		if (toolbarSearchFieldCancelButtonStyle == null) {
+			toolbarSearchFieldCancelButtonStyle = GetStyle("ToolbarSeachCancelButton");
+		}
+		if (toolbarSearchFieldCancelButtonEmptyStyle == null) {
+			toolbarSearchFieldCancelButtonEmptyStyle = GetStyle("ToolbarSeachCancelButtonEmpty");
+		}
+
 		switch (Event.current.type) {
 			case EventType.Repaint:
 				editorTracker.ClearDirty();
@@ -204,7 +221,7 @@ public class SearchableInspectorWindow : EditorWindow
 		if (editorTracker.activeEditors[0].target is GameObject) {
 			editorTracker.activeEditors[0].DrawHeader();
 		}
-		
+
 		if (Selection.activeGameObject &&
 			PrefabUtility.GetPrefabAssetType(Selection.activeGameObject) != PrefabAssetType.NotAPrefab && !PrefabUtility.IsPartOfPrefabInstance(Selection.activeGameObject)) {
 			editorTracker.activeEditors[0].DrawHeader();
@@ -212,19 +229,10 @@ public class SearchableInspectorWindow : EditorWindow
 			return;
 		}
 
-		if (onEnabledFirstTiming) {
-			if (Event.current.type == EventType.Repaint) {
-				EditorGUI.FocusTextInControl("SearchTextField");
-				onEnabledFirstTiming = false;
-			}
-		}
+		EditorGUILayout.Separator();
+		searchText = searchField(searchText);
+		EditorGUILayout.Separator();
 
-		EditorGUILayout.LabelField("Search Text");
-		GUI.SetNextControlName("SearchTextField");
-
-		searchText = EditorGUILayout.TextField(searchText);
-
-		EditorGUILayout.Space();
 		drawSeparator();
 
 		using (var scrollScope = new EditorGUILayout.ScrollViewScope(scrollPosition)) {
@@ -492,5 +500,54 @@ public class SearchableInspectorWindow : EditorWindow
 		findCustomEditorTypeArg[0] = editor.target.GetType();
 		findCustomEditorTypeArg[1] = multiEdit;
 		return findCustomEditorType.Invoke(null, findCustomEditorTypeArg) as System.Type;
+	}
+
+	/// <summary>
+	/// 検索ボックスを表示
+	/// </summary>
+	/// <param name="text"></param>
+	/// <returns></returns>
+	string searchField(string text)
+	{
+		if (onEnabledFirstTiming) {
+			if (Event.current.type == EventType.Repaint) {
+				EditorGUI.FocusTextInControl("SearchTextField");
+				onEnabledFirstTiming = false;
+			}
+		}
+
+		using (var scope = new EditorGUILayout.HorizontalScope()) {
+			GUILayout.Space(8.0f); // 位置微調整
+			var labelRect = EditorStyles.label.CalcSize(new GUIContent("Filter "));
+			EditorGUILayout.LabelField("Filter ", GUILayout.Width(labelRect.x));
+
+			GUI.SetNextControlName("SearchTextField");
+			text = EditorGUILayout.TextField(text, toolbarSearchFieldStyle);
+			if (text == "") {
+				GUILayout.Button(GUIContent.none, toolbarSearchFieldCancelButtonEmptyStyle);
+			} else {
+				if (GUILayout.Button(GUIContent.none, toolbarSearchFieldCancelButtonStyle)) {
+					text = "";
+					GUIUtility.keyboardControl = 0;
+				}
+			}
+
+			GUILayout.Space(8.0f); // 位置微調整
+		}
+
+		return text;
+	}
+
+	static private GUIStyle GetStyle(string styleName)
+	{
+		GUIStyle gUIStyle = GUI.skin.FindStyle(styleName);
+		if (gUIStyle == null) {
+			gUIStyle = EditorGUIUtility.GetBuiltinSkin(EditorSkin.Inspector).FindStyle(styleName);
+		}
+		if (gUIStyle == null) {
+			Debug.LogError("Missing built-in guistyle " + styleName);
+			gUIStyle = new GUIStyle();
+		}
+		return gUIStyle;
 	}
 }
