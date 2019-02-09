@@ -251,12 +251,30 @@ public class SearchableInspectorWindow : EditorWindow
 			scrollPosition = scrollScope.scrollPosition;
 		}
 
+		controlDragAndDrop();
+	}
+
+	void controlDragAndDrop()
+	{
 		if (Event.current.type == EventType.DragUpdated ||
 			Event.current.type == EventType.DragPerform) {
 
-			DragAndDrop.visualMode = DragAndDropVisualMode.Link;
+			DragAndDrop.visualMode = DragAndDropVisualMode.Rejected;
+
+			foreach (var item in DragAndDrop.objectReferences) {
+				if (item is MonoScript) {
+					DragAndDrop.visualMode = DragAndDropVisualMode.Link;
+					break;
+				}
+			}
+
+			if (DragAndDrop.visualMode != DragAndDropVisualMode.Link) {
+				return;
+			}
 
 			if (Event.current.type == EventType.DragPerform) {
+
+
 				DragAndDrop.AcceptDrag();
 
 				foreach (var item in DragAndDrop.paths) {
