@@ -308,7 +308,6 @@ public class SearchableInspectorWindow : EditorWindow
 			typeof(EditorGUIUtility).GetMethod("ResetGUIState", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
 
 			var viewProperties = new List<ShowPropertyInfo>();
-			EditorGUIUtility.labelWidth = Screen.width * 0.4f; // 0.4は調整値
 
 			var isShowComponent = true;
 			if (editor.targets.Length != Selection.objects.Length ||
@@ -328,6 +327,7 @@ public class SearchableInspectorWindow : EditorWindow
 					editor.DrawHeader();
 				}
 
+				EditorGUIUtility.labelWidth = Screen.width * 0.4f; // 0.4は調整値
 				if (string.IsNullOrEmpty(searchText)) {
 					drawFullInspector(editor);
 				} else {
