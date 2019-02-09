@@ -121,12 +121,12 @@ public class SearchableInspectorWindow : EditorWindow
 		editorTracker.isLocked = isLocked;
 		editorTracker.RebuildIfNecessary();
 
-		gameAssembly = Assembly.Load("Assembly-CSharp");
 		unityEditorAssembly = Assembly.Load("UnityEditor");
 
 		getHandlerMethodInfo = System.Type.GetType("UnityEditor.ScriptAttributeUtility, UnityEditor").GetMethod("GetHandler", BindingFlags.NonPublic | BindingFlags.Static);
 		findCustomEditorType = System.Type.GetType("UnityEditor.CustomEditorAttributes, UnityEditor").GetMethod("FindCustomEditorTypeByType", BindingFlags.NonPublic | BindingFlags.Static);
 		genericInspectorType = unityEditorAssembly.GetType("UnityEditor.GenericInspector");
+		gameAssembly = Assembly.Load("Assembly-CSharp");
 	}
 
 	void OnInspectorUpdate()
@@ -200,19 +200,15 @@ public class SearchableInspectorWindow : EditorWindow
 			return;
 		}
 
-		if (!!editorTracker.activeEditors[0]) {
+		// ヘッダを表示
+		if (editorTracker.activeEditors[0].target is GameObject) {
 			editorTracker.activeEditors[0].DrawHeader();
 		}
-
-		// プレハブアセットの場合、Open Prefabボタンを表示する
+		
 		if (Selection.activeGameObject &&
 			PrefabUtility.GetPrefabAssetType(Selection.activeGameObject) != PrefabAssetType.NotAPrefab && !PrefabUtility.IsPartOfPrefabInstance(Selection.activeGameObject)) {
-			selectObjectEditor.OnInspectorGUI();
-
-			if (GUILayout.Button("Open Prefab")) {
-				// プレハブ編集モードを開く
-				AssetDatabase.OpenAsset(Selection.activeGameObject);
-			}
+			editorTracker.activeEditors[0].DrawHeader();
+			editorTracker.activeEditors[0].OnInspectorGUI();
 			return;
 		}
 
@@ -240,8 +236,6 @@ public class SearchableInspectorWindow : EditorWindow
 			if (!!Selection.activeGameObject) {
 				activeObjectComponents = Selection.activeGameObject.GetComponents<Component>();
 			}
-
-			//EditorGUILayout.HelpBox("Components that are only on same of the selected objects cannot be multi-edited.", MessageType.None);
 
 			drawSeparator();
 			EditorGUILayout.Space();
@@ -290,8 +284,8 @@ public class SearchableInspectorWindow : EditorWindow
 		int count = 0;
 		foreach (var editor in editorTracker.activeEditors) {
 			if (editor == null ||
-				editor.target.GetType().IsSubclassOf(typeof(AssetImporter)) ||
 				editor.target == null ||
+				editor.target.GetType() == typeof(AssetImporter) ||
 				editor.target is GameObject) {
 				continue;
 			}
@@ -301,7 +295,14 @@ public class SearchableInspectorWindow : EditorWindow
 				continue;
 			}
 
-			var foldout = EditorGUILayout.InspectorTitlebar(activeEditorTable[editor].foldout, editor);
+			typeof(EditorGUIUtility).GetMethod("ResetGUIState", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
+
+			var foldout = true;
+			if (!hasLargeHeader(editor)) {
+				foldout = EditorGUILayout.InspectorTitlebar(activeEditorTable[editor].foldout, editor);
+			} else {
+				editor.DrawHeader();
+			}
 
 			++EditorGUI.indentLevel;
 
@@ -316,6 +317,20 @@ public class SearchableInspectorWindow : EditorWindow
 			temp.Add(editor, new EditorInfo(editor, foldout));
 		}
 		activeEditorTable = temp;
+	}
+
+	/// <summary>
+	/// ヘッダを表示するか
+	/// </summary>
+	/// <param name="editor"></param>
+	/// <returns></returns>
+	bool hasLargeHeader(Editor editor)
+	{
+		if (AssetDatabase.IsMainAsset(editor.target) || AssetDatabase.IsSubAsset(editor.target) ||
+			editor.target is GameObject) {
+			return true;
+		}
+		return false;
 	}
 
 	/// <summary>
