@@ -335,7 +335,8 @@ public class SearchableInspectorWindow : EditorWindow
 	bool hasLargeHeader(Editor editor)
 	{
 		if (AssetDatabase.IsMainAsset(editor.target) || AssetDatabase.IsSubAsset(editor.target) ||
-			editor.target is GameObject) {
+			editor.target is GameObject ||
+			editor == editorTracker.activeEditors[0]) {
 			return true;
 		}
 		return false;
