@@ -426,7 +426,9 @@ public class SearchableInspectorWindow : EditorWindow
 	/// <param name="editor"></param>
 	void drawFullInspector(Editor editor)
 	{
+		++EditorGUI.indentLevel;
 		editor.OnInspectorGUI();
+		--EditorGUI.indentLevel;
 	}
 
 	/// <summary>
