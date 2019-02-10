@@ -191,11 +191,14 @@ public class SearchableInspectorWindow : EditorWindow
 		return isDirty();
 	}
 
-
+	/// <summary>
+	/// 検索文字列
+	/// </summary>
 	string searchText;
 
 	private void OnGUI()
 	{
+		// 検索バーのスタイル取得
 		if (toolbarSearchFieldStyle == null) {
 			toolbarSearchFieldStyle = GetStyle("ToolbarSeachTextField");
 		}
@@ -229,13 +232,13 @@ public class SearchableInspectorWindow : EditorWindow
 			editorTracker.activeEditors[0].DrawHeader();
 		}
 
-		if (Selection.activeGameObject &&
-			PrefabUtility.GetPrefabAssetType(Selection.activeGameObject) != PrefabAssetType.NotAPrefab && !PrefabUtility.IsPartOfPrefabInstance(Selection.activeGameObject)) {
+		// プレハブアセットなら、専用の表示
+		if (isPrefabAsset()) {
 			editorTracker.activeEditors[0].DrawHeader();
 			editorTracker.activeEditors[0].OnInspectorGUI();
-			return;
 		}
 
+		// 検索ボックスの表示
 		EditorGUILayout.Separator();
 		using (var changeScope = new EditorGUI.ChangeCheckScope()) {
 			searchText = searchField(searchText);
@@ -248,20 +251,26 @@ public class SearchableInspectorWindow : EditorWindow
 
 		using (var scrollScope = new EditorGUILayout.ScrollViewScope(scrollPosition)) {
 			drawEditors();
-
 			EditorGUILayout.Separator();
-
-			Component[] activeObjectComponents = null;
-			if (!!Selection.activeGameObject) {
-				activeObjectComponents = Selection.activeGameObject.GetComponents<Component>();
-			}
-
 			GUILayout.Space(15.0f);
-
 			scrollPosition = scrollScope.scrollPosition;
 		}
 
+		// ドラッグアンドドロップ制御
 		controlDragAndDrop();
+	}
+
+	/// <summary>
+	/// プレハブアセットかどうか
+	/// </summary>
+	/// <returns></returns>
+	bool isPrefabAsset()
+	{
+		if (Selection.activeGameObject &&
+			PrefabUtility.GetPrefabAssetType(Selection.activeGameObject) != PrefabAssetType.NotAPrefab && !PrefabUtility.IsPartOfPrefabInstance(Selection.activeGameObject)) {
+			return true;
+		}
+		return false;
 	}
 
 	/// <summary>
@@ -310,6 +319,9 @@ public class SearchableInspectorWindow : EditorWindow
 		}
 	}
 
+	/// <summary>
+	/// ドラッグアンドドロップ制御
+	/// </summary>
 	void controlDragAndDrop()
 	{
 		if (Event.current.type == EventType.DragUpdated ||
@@ -344,6 +356,9 @@ public class SearchableInspectorWindow : EditorWindow
 		}
 	}
 
+	/// <summary>
+	/// 区切り線の描画
+	/// </summary>
 	void drawSeparator()
 	{
 		lineStyle = new GUIStyle("box");
@@ -409,6 +424,10 @@ public class SearchableInspectorWindow : EditorWindow
 		}
 	}
 
+	/// <summary>
+	/// インスペクタ表示
+	/// </summary>
+	/// <param name="editor"></param>
 	void drawFullInspector(Editor editor)
 	{
 		editor.OnInspectorGUI();
@@ -441,7 +460,7 @@ public class SearchableInspectorWindow : EditorWindow
 			componentEditor.targets.Length == 1) {
 			var propertyIterator = componentEditor.serializedObject.GetIterator();
 			if (propertyIterator.NextVisible(true)) {
-				buildFileredProperties(propertyIterator, false, outViewProperties);
+				buildFileredProperties(propertyIterator, outViewProperties);
 			}
 		} else {
 			GUILayout.Label("Multi-object editing not supported.", EditorStyles.helpBox);
@@ -450,7 +469,13 @@ public class SearchableInspectorWindow : EditorWindow
 		return outViewProperties.Count > 0;
 	}
 
-	bool buildFileredProperties(SerializedProperty iterator, bool forceDraw, List<ShowPropertyInfo> outViewProperties)
+	/// <summary>
+	/// 検索文字列によるフィルタが適用されたプロパティのリストを返す
+	/// </summary>
+	/// <param name="iterator">プロパティのイテレータ。走査する先頭のプロパティを渡す</param>
+	/// <param name="outViewProperties"></param>
+	/// <returns>一つでも表示するプロパティがあるなら true</returns>
+	bool buildFileredProperties(SerializedProperty iterator, List<ShowPropertyInfo> outViewProperties)
 	{
 		var oldDepth = iterator.depth;
 
@@ -473,7 +498,7 @@ public class SearchableInspectorWindow : EditorWindow
 			if (!!iterator.hasVisibleChildren && isFoldout && iterator.propertyType == SerializedPropertyType.Generic) {
 				var childIterator = iterator.Copy();
 				childIterator.NextVisible(true);
-				if (buildFileredProperties(childIterator, false, outViewProperties)) {
+				if (buildFileredProperties(childIterator, outViewProperties)) {
 					outViewProperties.Insert(currentPosition, new ShowPropertyInfo(iterator.Copy(), false));
 					++viewCount;
 				}
@@ -482,6 +507,11 @@ public class SearchableInspectorWindow : EditorWindow
 		return viewCount > 0;
 	}
 
+	/// <summary>
+	/// 指定のプロパティが検索条件にヒットするなら trueを返す
+	/// </summary>
+	/// <param name="property"></param>
+	/// <returns></returns>
 	bool search(SerializedProperty property)
 	{
 		var searchTextTokens = searchText.Split(' ');
@@ -497,6 +527,10 @@ public class SearchableInspectorWindow : EditorWindow
 		return false;
 	}
 
+	/// <summary>
+	/// プロパティリストを描画
+	/// </summary>
+	/// <param name="properties"></param>
 	void drawProperties(List<ShowPropertyInfo> properties)
 	{
 		if (properties.Count == 0) {
@@ -509,12 +543,14 @@ public class SearchableInspectorWindow : EditorWindow
 		var defaultIndentLevel = EditorGUI.indentLevel;
 		var defaultColor = GUI.color;
 		foreach (var propertyInfo in properties) {
+			// インデントを設定
 			EditorGUI.indentLevel = propertyInfo.propery.depth + 1;
 
 			if (!!collapsed && propertyInfo.propery.depth <= collapsedDepth) {
 				collapsed = false;
 			}
 
+			// プロパティが折り畳まれているなら、それより下位のプロパティは非表示にする
 			if (!collapsed) {
 				if (!EditorGUILayout.PropertyField(propertyInfo.propery, propertyInfo.showAllChildren)) {
 					collapsedDepth = propertyInfo.propery.depth;
@@ -522,6 +558,7 @@ public class SearchableInspectorWindow : EditorWindow
 				}
 			}
 
+			// ヒットしたプロパティに目印をつける
 			if (!!propertyInfo.showAllChildren) {
 				GUI.color = Color.yellow;
 				var lastRect = GUILayoutUtility.GetLastRect();
@@ -538,6 +575,10 @@ public class SearchableInspectorWindow : EditorWindow
 		GUI.color = defaultColor;
 	}
 
+	/// <summary>
+	/// ロックボタン
+	/// </summary>
+	/// <param name="rect"></param>
 	void ShowButton(Rect rect)
 	{
 		using (var scope = new EditorGUI.ChangeCheckScope()) {
@@ -597,6 +638,11 @@ public class SearchableInspectorWindow : EditorWindow
 		return text;
 	}
 
+	/// <summary>
+	/// スタイル取得用、ヘルパ
+	/// </summary>
+	/// <param name="styleName"></param>
+	/// <returns></returns>
 	static private GUIStyle GetStyle(string styleName)
 	{
 		GUIStyle gUIStyle = GUI.skin.FindStyle(styleName);
