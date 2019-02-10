@@ -400,18 +400,22 @@ public class SearchableInspectorWindow : EditorWindow
 					editor.DrawHeader();
 				}
 
-				EditorGUIUtility.labelWidth = Screen.width * 0.4f; // 0.4は調整値
-				if (!!activeEditorTable[editor].isFoldout) {
-					if (string.IsNullOrEmpty(searchText)) {
-						drawFullInspector(editor);
-					} else {
-						var componentSerializedObject = editor.serializedObject;
-						componentSerializedObject.Update();
-						drawProperties(showProperties);
-						componentSerializedObject.ApplyModifiedProperties();
+				bool isEnabled = (bool)editor.GetType().GetMethod("IsEnabled", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(editor, null);
+
+				using (var diableScope = new EditorGUI.DisabledGroupScope(!isEnabled)) {
+					EditorGUIUtility.labelWidth = Screen.width * 0.4f; // 0.4は調整値
+					if (!!activeEditorTable[editor].isFoldout) {
+						if (string.IsNullOrEmpty(searchText)) {
+							drawFullInspector(editor);
+						} else {
+							var componentSerializedObject = editor.serializedObject;
+							componentSerializedObject.Update();
+							drawProperties(showProperties);
+							componentSerializedObject.ApplyModifiedProperties();
+						}
 					}
 				}
-				
+
 				++count;
 			} else {
 				isHideSomeComponent = true;
@@ -442,6 +446,7 @@ public class SearchableInspectorWindow : EditorWindow
 	{
 		if (AssetDatabase.IsMainAsset(editor.target) || AssetDatabase.IsSubAsset(editor.target) ||
 			editor.target is GameObject ||
+			editor.target is Material ||
 			editor == editorTracker.activeEditors[0]) {
 			return true;
 		}
