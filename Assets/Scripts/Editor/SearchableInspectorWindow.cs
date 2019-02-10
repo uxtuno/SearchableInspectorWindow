@@ -230,12 +230,6 @@ public class SearchableInspectorWindow : EditorWindow
 			editorTracker.activeEditors[0].DrawHeader();
 		}
 
-		// プレハブアセットなら、専用の表示
-		if (isPrefabAsset()) {
-			editorTracker.activeEditors[0].DrawHeader();
-			editorTracker.activeEditors[0].OnInspectorGUI();
-		}
-
 		// 検索ボックスの表示
 		EditorGUILayout.Separator();
 		using (var changeScope = new EditorGUI.ChangeCheckScope()) {
@@ -484,7 +478,7 @@ public class SearchableInspectorWindow : EditorWindow
 
 		var viewCount = 0;
 
-		while (iterator.NextVisible(false) && (oldDepth == iterator.depth)) {
+		do {
 			var handler = getHandlerMethodInfo.Invoke(null, new object[1] { iterator });
 			var type = handler.GetType();
 			propertyDrawerInfo = type.GetProperty("hasPropertyDrawer", BindingFlags.Public | BindingFlags.Instance);
@@ -499,7 +493,7 @@ public class SearchableInspectorWindow : EditorWindow
 
 			var currentPosition = outViewProperties.Count;
 			var hasPropertyDrawer = (bool)propertyDrawerInfo.GetValue(handler);
-			if (!!iterator.hasVisibleChildren && isFoldout && iterator.propertyType == SerializedPropertyType.Generic && !!hasPropertyDrawer) {
+			if (!!iterator.hasVisibleChildren && isFoldout && iterator.propertyType == SerializedPropertyType.Generic) {
 				var childIterator = iterator.Copy();
 				childIterator.NextVisible(true);
 				if (buildFileredProperties(childIterator, outViewProperties)) {
@@ -507,7 +501,7 @@ public class SearchableInspectorWindow : EditorWindow
 					++viewCount;
 				}
 			}
-		}
+		} while (iterator.NextVisible(false) && (oldDepth == iterator.depth));
 		return viewCount > 0;
 	}
 
