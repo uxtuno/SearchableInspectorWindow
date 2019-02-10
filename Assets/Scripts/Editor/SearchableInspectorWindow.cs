@@ -20,12 +20,6 @@ public class SearchableInspectorWindow : EditorWindow
 		window.onEnabledFirstTiming = true;
 	}
 
-	bool isDirty()
-	{
-		editorTracker.VerifyModifiedMonoBehaviours();
-		return editorTracker.isDirty;
-	}
-
 	Assembly gameAssembly;
 	Assembly unityEditorAssembly;
 
@@ -106,13 +100,16 @@ public class SearchableInspectorWindow : EditorWindow
 	/// </summary>
 	Editor selectObjectEditor;
 
-	GUIStyle lineStyle;
-
+	/// <summary>
+	/// プロパティハンドラを取得するための変数
+	/// </summary>
 	private MethodInfo getHandlerMethodInfo;
 	private static object[] getHandlerParams;
-
 	private object handler;
 
+	/// <summary>
+	/// プロパティドローワーの情報を取得するための変数
+	/// </summary>
 	private PropertyInfo propertyDrawerInfo;
 	private MethodInfo guiHandler;
 	private object[] guiParams;
@@ -188,7 +185,8 @@ public class SearchableInspectorWindow : EditorWindow
 	/// <returns></returns>
 	bool checkSelectionGameObjectEditted()
 	{
-		return isDirty();
+		editorTracker.VerifyModifiedMonoBehaviours();
+		return editorTracker.isDirty;
 	}
 
 	/// <summary>
@@ -361,7 +359,7 @@ public class SearchableInspectorWindow : EditorWindow
 	/// </summary>
 	void drawSeparator()
 	{
-		lineStyle = new GUIStyle("box");
+		var lineStyle = new GUIStyle("box");
 		lineStyle.border.top = lineStyle.border.bottom = 1;
 		lineStyle.margin.top = lineStyle.margin.bottom = 1;
 		lineStyle.padding.top = lineStyle.padding.bottom = 1;
@@ -491,7 +489,7 @@ public class SearchableInspectorWindow : EditorWindow
 			var type = handler.GetType();
 			propertyDrawerInfo = type.GetProperty("hasPropertyDrawer", BindingFlags.Public | BindingFlags.Instance);
 
-			bool isFoldout = true;
+			var isFoldout = true;
 
 			if (search(iterator)) {
 				outViewProperties.Add(new ShowPropertyInfo(iterator.Copy(), true));
@@ -500,7 +498,8 @@ public class SearchableInspectorWindow : EditorWindow
 			}
 
 			var currentPosition = outViewProperties.Count;
-			if (!!iterator.hasVisibleChildren && isFoldout && iterator.propertyType == SerializedPropertyType.Generic) {
+			var hasPropertyDrawer = (bool)propertyDrawerInfo.GetValue(handler);
+			if (!!iterator.hasVisibleChildren && isFoldout && iterator.propertyType == SerializedPropertyType.Generic && !!hasPropertyDrawer) {
 				var childIterator = iterator.Copy();
 				childIterator.NextVisible(true);
 				if (buildFileredProperties(childIterator, outViewProperties)) {
