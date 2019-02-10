@@ -33,24 +33,9 @@ public class SearchableInspectorWindow : EditorWindow
 	bool isLocked;
 
 	/// <summary>
-	/// 表示中 Editor の状態を保持するためのクラス
-	/// </summary>
-	struct EditorInfo
-	{
-		public EditorInfo(Editor editor, bool foldout)
-		{
-			this.foldout = foldout;
-			this.serializedObject = new SerializedObject(editor.targets);
-		}
-
-		public bool foldout;
-		public SerializedObject serializedObject;
-	}
-
-	/// <summary>
 	/// プロパティをどのように表示するか
 	/// </summary>
-	struct ShowPropertyInfo
+	class ShowPropertyInfo
 	{
 		public ShowPropertyInfo(SerializedProperty property, bool showChildren)
 		{
@@ -66,8 +51,50 @@ public class SearchableInspectorWindow : EditorWindow
 		public bool showAllChildren;
 	}
 
+	/// <summary>
+	/// どのようにインスペクタを表示するかの情報
+	/// コンポーネント単体の描画に使用
+	/// </summary>
+	class ShowInspectorInfo
+	{
+		public ShowInspectorInfo(Editor inspectorEditor, bool isShowCompontnt, bool isFoldout, List<ShowPropertyInfo> showProperties)
+		{
+			this.inspectorEditor = inspectorEditor;
+			this.isShowCompontnt = isShowCompontnt;
+			this.isFoldout = isFoldout;
+			this.showProperties = showProperties;
+		}
+		/// <summary>
+		/// 使用するEditor
+		/// </summary>
+		public Editor inspectorEditor;
+
+		/// <summary>
+		/// コンポーネント自体を表示するなら true
+		/// このフラグが false なら、コンポーネントのタイトルバー自体も非表示にする
+		/// </summary>
+		public bool isShowCompontnt;
+
+		/// <summary>
+		/// コンポーネントが折り畳まれているなら true
+		/// こちらは、タイトルバーは表示する
+		/// </summary>
+		public bool isFoldout;
+
+		/// <summary>
+		/// 実際に表示するプロパティ
+		/// フィルタリングされて、全てのプロパティは表示しないかもしれない
+		/// </summary>
+		public List<ShowPropertyInfo> showProperties { get; set; }
+	}
+
+	/// <summary>
+	/// インスペクタ全体の描画に使用
+	/// </summary>
+	List<ShowInspectorInfo> showInspectorEditors = new List<ShowInspectorInfo>();
+
 	Vector2 scrollPosition;
-	Dictionary<Editor, EditorInfo> activeEditorTable = new Dictionary<Editor, EditorInfo>();
+	Dictionary<Editor, ShowInspectorInfo> activeEditorTable = new Dictionary<Editor, ShowInspectorInfo>();
 
 	/// <summary>
 	/// Window が有効になってから、GUI を初めて更新するまでの間 true
@@ -125,6 +152,9 @@ public class SearchableInspectorWindow : EditorWindow
 		findCustomEditorType = System.Type.GetType("UnityEditor.CustomEditorAttributes, UnityEditor").GetMethod("FindCustomEditorTypeByType", BindingFlags.NonPublic | BindingFlags.Static);
 		genericInspectorType = unityEditorAssembly.GetType("UnityEditor.GenericInspector");
 		gameAssembly = Assembly.Load("Assembly-CSharp");
+
+		updateCacheActiveEditors();
+		buildDrawEditors(true);
 	}
 
 	void OnInspectorUpdate()
@@ -161,22 +191,6 @@ public class SearchableInspectorWindow : EditorWindow
 		return isDirty();
 	}
 
-	void rebuildEditorElements()
-	{
-		// ヘッダの描画用
-		selectObjectEditor = Editor.CreateEditor(Selection.objects);
-
-		// GCが高頻度で発生する事になるので、チューニング対象
-		var newActiveEditorTable = new Dictionary<Editor, EditorInfo>();
-		foreach (var editor in editorTracker.activeEditors) {
-			if (activeEditorTable.ContainsKey(editor)) {
-				newActiveEditorTable.Add(editor, new EditorInfo(editor, activeEditorTable[editor].foldout));
-			} else {
-				newActiveEditorTable.Add(editor, new EditorInfo(editor, true));
-			}
-		}
-		activeEditorTable = newActiveEditorTable;
-	}
 
 	string searchText;
 
@@ -197,7 +211,9 @@ public class SearchableInspectorWindow : EditorWindow
 				editorTracker.ClearDirty();
 				break;
 			case EventType.Layout: // レイアウト再計算のため、状態更新。
-				rebuildEditorElements();
+				if (updateCacheActiveEditors()) {
+					buildDrawEditors(true);
+				}
 				break;
 		}
 
@@ -221,9 +237,13 @@ public class SearchableInspectorWindow : EditorWindow
 		}
 
 		EditorGUILayout.Separator();
-		searchText = searchField(searchText);
-		EditorGUILayout.Separator();
+		using (var changeScope = new EditorGUI.ChangeCheckScope()) {
+			searchText = searchField(searchText);
 
+			// 表示内容を更新
+			buildDrawEditors(changeScope.changed);
+		}
+		EditorGUILayout.Separator();
 		drawSeparator();
 
 		using (var scrollScope = new EditorGUILayout.ScrollViewScope(scrollPosition)) {
@@ -242,6 +262,52 @@ public class SearchableInspectorWindow : EditorWindow
 		}
 
 		controlDragAndDrop();
+	}
+
+	/// <summary>
+	/// 描画に使用する Editor を確定
+	/// 描画内容の再構築が必要なら、true を返す
+	/// </summary>
+	bool updateCacheActiveEditors()
+	{
+		// ヘッダの描画用
+		selectObjectEditor = Editor.CreateEditor(Selection.objects);
+
+		// GCが高頻度で発生する事になるので、チューニング対象
+		var newActiveEditorTable = new Dictionary<Editor, ShowInspectorInfo>();
+		// 以前の更新時と、変化していない Editor の数
+		var sameEditorCount = 0;
+		foreach (var editor in editorTracker.activeEditors) {
+			if (activeEditorTable.ContainsKey(editor)) {
+				newActiveEditorTable.Add(editor, new ShowInspectorInfo(editor, activeEditorTable[editor].isShowCompontnt, activeEditorTable[editor].isFoldout, activeEditorTable[editor].showProperties));
+				++sameEditorCount;
+			} else {
+				newActiveEditorTable.Add(editor, new ShowInspectorInfo(editor, true, true, new List<ShowPropertyInfo>()));
+			}
+		}
+		activeEditorTable = newActiveEditorTable;
+		return sameEditorCount != editorTracker.activeEditors.Length;
+	}
+
+	/// <summary>
+	/// インスペクタの実際の描画内容を構築
+	/// </summary>
+	void buildDrawEditors(bool isBuildFilteredProperties)
+	{
+		foreach (var editor in editorTracker.activeEditors) {
+			var isShowComponent = activeEditorTable[editor].isShowCompontnt;
+
+			if (editor.targets.Length != Selection.objects.Length) {
+				isShowComponent = false;
+			} else if (!string.IsNullOrEmpty(searchText) && isBuildFilteredProperties) {
+				var showProperties = new List<ShowPropertyInfo>();
+				isShowComponent = buildDrawEditor(editor, showProperties);
+				activeEditorTable[editor].showProperties = showProperties;
+			} else if (string.IsNullOrEmpty(searchText)) {
+				isShowComponent = true; // 検索ボクスに何も入力されていないなら、表示確定
+			}
+			activeEditorTable[editor].isShowCompontnt = isShowComponent;
+		}
 	}
 
 	void controlDragAndDrop()
@@ -294,7 +360,6 @@ public class SearchableInspectorWindow : EditorWindow
 	/// </summary>
 	void drawEditors()
 	{
-		var temp = new Dictionary<Editor, EditorInfo>();
 		int count = 0;
 		var isHideSomeComponent = false; // 一つ以上のコンポーネントが非表示
 		foreach (var editor in editorTracker.activeEditors) {
@@ -305,42 +370,38 @@ public class SearchableInspectorWindow : EditorWindow
 				continue;
 			}
 
-			typeof(EditorGUIUtility).GetMethod("ResetGUIState", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
-
-			var viewProperties = new List<ShowPropertyInfo>();
-
-			var isShowComponent = true;
-			if (editor.targets.Length != Selection.objects.Length ||
-				!activeEditorTable.ContainsKey(editor)) {
-				isHideSomeComponent = true;
-				isShowComponent = false;
-			} else if (!string.IsNullOrEmpty(searchText)) {
-				isShowComponent = drawComponentInspector(editor, count, viewProperties);
+			if (Event.current.type == EventType.Repaint) {
+				typeof(Editor).GetProperty("isInspectorDirty", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(editor, false);
 			}
 
-			var foldout = activeEditorTable[editor].foldout;
+			var foldout = activeEditorTable[editor].isFoldout;
+			var isShowComponent = activeEditorTable[editor].isShowCompontnt;
+			var showProperties = activeEditorTable[editor].showProperties;
 
 			if (!!isShowComponent) {
 				if (!hasLargeHeader(editor)) {
-					foldout = EditorGUILayout.InspectorTitlebar(activeEditorTable[editor].foldout, editor);
+					activeEditorTable[editor].isFoldout = EditorGUILayout.InspectorTitlebar(activeEditorTable[editor].isFoldout, editor);
 				} else {
 					editor.DrawHeader();
 				}
 
 				EditorGUIUtility.labelWidth = Screen.width * 0.4f; // 0.4は調整値
-				if (string.IsNullOrEmpty(searchText)) {
-					drawFullInspector(editor);
-				} else {
-					drawProperties(viewProperties);
+				if (!!activeEditorTable[editor].isFoldout) {
+					if (string.IsNullOrEmpty(searchText)) {
+						drawFullInspector(editor);
+					} else {
+						var componentSerializedObject = editor.serializedObject;
+						componentSerializedObject.Update();
+						drawProperties(showProperties);
+						componentSerializedObject.ApplyModifiedProperties();
+					}
 				}
+				
 				++count;
 			} else {
 				isHideSomeComponent = true;
 			}
-
-			temp.Add(editor, new EditorInfo(editor, foldout));
 		}
-		activeEditorTable = temp;
 
 		if (!!isHideSomeComponent) {
 			drawSeparator();
@@ -372,44 +433,30 @@ public class SearchableInspectorWindow : EditorWindow
 	/// コンポーネント単体を表示
 	/// </summary>
 	/// <param name="componentEditor">表示するコンポーネントのEditor</param>
-	bool drawComponentInspector(Editor componentEditor, int index, List<ShowPropertyInfo> outViewProperties)
+	bool buildDrawEditor(Editor componentEditor, List<ShowPropertyInfo> outViewProperties)
 	{
-		if (Event.current.type == EventType.Repaint) {
-			typeof(Editor).GetProperty("isInspectorDirty", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(componentEditor, false);
-		}
-
 		// 検索ボックスに入力されたテキストに応じて、プロパティをフィルタリングして表示
-		var componentSerializedObject = activeEditorTable[componentEditor].serializedObject;
-		componentSerializedObject.Update();
-
 		if ((componentEditor.GetType() == genericInspectorType && getCustomEditorType(componentEditor, false) == null) ||
 			getCustomEditorType(componentEditor, true) != null ||
 			componentEditor.targets.Length == 1) {
-			var propertyIterator = componentSerializedObject.GetIterator();
-			buildFileredProperties(propertyIterator, false, outViewProperties);
+			var propertyIterator = componentEditor.serializedObject.GetIterator();
+			if (propertyIterator.NextVisible(true)) {
+				buildFileredProperties(propertyIterator, false, outViewProperties);
+			}
 		} else {
 			GUILayout.Label("Multi-object editing not supported.", EditorStyles.helpBox);
 		}
 
-		componentSerializedObject.ApplyModifiedProperties();
 		return outViewProperties.Count > 0;
 	}
 
 	bool buildFileredProperties(SerializedProperty iterator, bool forceDraw, List<ShowPropertyInfo> outViewProperties)
 	{
-		// 一階層潜る
-		if (!iterator.NextVisible(true)) {
-			return false;
-		}
-
 		var oldDepth = iterator.depth;
-		if (oldDepth >= 2) {
-			++EditorGUI.indentLevel;
-		}
 
 		var viewCount = 0;
 
-		do {
+		while (iterator.NextVisible(false) && (oldDepth == iterator.depth)) {
 			var handler = getHandlerMethodInfo.Invoke(null, new object[1] { iterator });
 			var type = handler.GetType();
 			propertyDrawerInfo = type.GetProperty("hasPropertyDrawer", BindingFlags.Public | BindingFlags.Instance);
@@ -425,17 +472,13 @@ public class SearchableInspectorWindow : EditorWindow
 			var currentPosition = outViewProperties.Count;
 			if (!!iterator.hasVisibleChildren && isFoldout && iterator.propertyType == SerializedPropertyType.Generic) {
 				var childIterator = iterator.Copy();
+				childIterator.NextVisible(true);
 				if (buildFileredProperties(childIterator, false, outViewProperties)) {
 					outViewProperties.Insert(currentPosition, new ShowPropertyInfo(iterator.Copy(), false));
 					++viewCount;
 				}
 			}
-		} while (iterator.NextVisible(false) && oldDepth == iterator.depth);
-
-		if (oldDepth >= 2) {
-			--EditorGUI.indentLevel;
 		}
-
 		return viewCount > 0;
 	}
 
