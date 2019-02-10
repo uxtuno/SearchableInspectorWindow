@@ -493,7 +493,7 @@ public class SearchableInspectorWindow : EditorWindow
 
 			var currentPosition = outViewProperties.Count;
 			var hasPropertyDrawer = (bool)propertyDrawerInfo.GetValue(handler);
-			if (!!iterator.hasVisibleChildren && isFoldout && iterator.propertyType == SerializedPropertyType.Generic) {
+			if (!!iterator.hasVisibleChildren && isFoldout && iterator.propertyType == SerializedPropertyType.Generic && !hasPropertyDrawer) {
 				var childIterator = iterator.Copy();
 				childIterator.NextVisible(true);
 				if (buildFileredProperties(childIterator, outViewProperties)) {
