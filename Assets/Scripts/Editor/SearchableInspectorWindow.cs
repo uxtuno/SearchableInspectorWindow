@@ -23,7 +23,17 @@ public class SearchableInspectorWindow : EditorWindow
 	Assembly gameAssembly;
 	Assembly unityEditorAssembly;
 
+
 	ActiveEditorTracker editorTracker;
+	ActiveEditorTracker EditorTracker {
+		get
+		{
+			if (editorTracker == null) {
+				editorTracker = new ActiveEditorTracker();
+			}
+			return editorTracker;
+		}
+	}
 	bool isLocked;
 
 	/// <summary>
@@ -96,11 +106,6 @@ public class SearchableInspectorWindow : EditorWindow
 	bool onEnabledFirstTiming;
 
 	/// <summary>
-	/// 選択中ゲームオブジェクト自体の Editor
-	/// </summary>
-	Editor selectObjectEditor;
-
-	/// <summary>
 	/// プロパティハンドラを取得するための変数
 	/// </summary>
 	private MethodInfo getHandlerMethodInfo;
@@ -139,9 +144,8 @@ public class SearchableInspectorWindow : EditorWindow
 
 		onEnabledFirstTiming = true;
 
-		editorTracker = new ActiveEditorTracker();
-		editorTracker.isLocked = isLocked;
-		editorTracker.RebuildIfNecessary();
+		EditorTracker.isLocked = isLocked;
+		EditorTracker.RebuildIfNecessary();
 
 		unityEditorAssembly = Assembly.Load("UnityEditor");
 
@@ -162,15 +166,9 @@ public class SearchableInspectorWindow : EditorWindow
 		}
 	}
 
-	void OnDisable()
+	void OnDestroy()
 	{
-		if (editorTracker != null &&
-			editorTracker.activeEditors != null &&
-			editorTracker.activeEditors.Length > 0 &&
-			editorTracker.activeEditors[0] != null) {
-
-			editorTracker.Destroy();
-		}
+		EditorTracker.Destroy();
 	}
 
 	/// <summary>
@@ -185,8 +183,8 @@ public class SearchableInspectorWindow : EditorWindow
 	/// <returns></returns>
 	bool checkSelectionGameObjectEditted()
 	{
-		editorTracker.VerifyModifiedMonoBehaviours();
-		return editorTracker.isDirty;
+		EditorTracker.VerifyModifiedMonoBehaviours();
+		return EditorTracker.isDirty;
 	}
 
 	/// <summary>
@@ -208,26 +206,25 @@ public class SearchableInspectorWindow : EditorWindow
 		}
 
 		switch (Event.current.type) {
-			case EventType.Repaint:
-				editorTracker.ClearDirty();
-				break;
-			case EventType.Layout: // レイアウト再計算のため、状態更新。
-				if (updateCacheActiveEditors()) {
-					buildDrawEditors(true);
-				}
-				break;
+		case EventType.Repaint:
+			EditorTracker.ClearDirty();
+			break;
+		case EventType.Layout: // レイアウト再計算のため、状態更新。
+			if (updateCacheActiveEditors()) {
+				buildDrawEditors(true);
+			}
+			break;
 		}
 
 		// 表示するものが無い場合 return
 		if (activeEditorTable == null ||
-			editorTracker.activeEditors.Length == 0 ||
-			!selectObjectEditor) {
+			EditorTracker.activeEditors.Length == 0) {
 			return;
 		}
 
 		// ヘッダを表示
-		if (editorTracker.activeEditors[0].target is GameObject) {
-			editorTracker.activeEditors[0].DrawHeader();
+		if (EditorTracker.activeEditors[0].target is GameObject) {
+			EditorTracker.activeEditors[0].DrawHeader();
 		}
 
 		// 検索ボックスの表示
@@ -271,14 +268,11 @@ public class SearchableInspectorWindow : EditorWindow
 	/// </summary>
 	bool updateCacheActiveEditors()
 	{
-		// ヘッダの描画用
-		selectObjectEditor = Editor.CreateEditor(Selection.objects);
-
 		// GCが高頻度で発生する事になるので、チューニング対象
 		var newActiveEditorTable = new Dictionary<Editor, ShowInspectorInfo>();
 		// 以前の更新時と、変化していない Editor の数
 		var sameEditorCount = 0;
-		foreach (var editor in editorTracker.activeEditors) {
+		foreach (var editor in EditorTracker.activeEditors) {
 			if (activeEditorTable.ContainsKey(editor)) {
 				newActiveEditorTable.Add(editor, new ShowInspectorInfo(editor, activeEditorTable[editor].isShowCompontnt, activeEditorTable[editor].isFoldout, activeEditorTable[editor].showProperties));
 				++sameEditorCount;
@@ -287,7 +281,7 @@ public class SearchableInspectorWindow : EditorWindow
 			}
 		}
 		activeEditorTable = newActiveEditorTable;
-		return sameEditorCount != editorTracker.activeEditors.Length;
+		return sameEditorCount != EditorTracker.activeEditors.Length;
 	}
 
 	/// <summary>
@@ -295,7 +289,7 @@ public class SearchableInspectorWindow : EditorWindow
 	/// </summary>
 	void buildDrawEditors(bool isBuildFilteredProperties)
 	{
-		foreach (var editor in editorTracker.activeEditors) {
+		foreach (var editor in EditorTracker.activeEditors) {
 			var isShowComponent = activeEditorTable[editor].isShowCompontnt;
 
 			if (editor.targets.Length != Selection.objects.Length) {
@@ -369,7 +363,7 @@ public class SearchableInspectorWindow : EditorWindow
 	{
 		int count = 0;
 		var isHideSomeComponent = false; // 一つ以上のコンポーネントが非表示
-		foreach (var editor in editorTracker.activeEditors) {
+		foreach (var editor in EditorTracker.activeEditors) {
 			if (editor == null ||
 				editor.target == null ||
 				editor.target.GetType() == typeof(AssetImporter) ||
@@ -441,7 +435,7 @@ public class SearchableInspectorWindow : EditorWindow
 		if (AssetDatabase.IsMainAsset(editor.target) || AssetDatabase.IsSubAsset(editor.target) ||
 			editor.target is GameObject ||
 			editor.target is Material ||
-			editor == editorTracker.activeEditors[0]) {
+			editor == EditorTracker.activeEditors[0]) {
 			return true;
 		}
 		return false;
@@ -584,7 +578,7 @@ public class SearchableInspectorWindow : EditorWindow
 		using (var scope = new EditorGUI.ChangeCheckScope()) {
 			isLocked = GUI.Toggle(rect, isLocked, GUIContent.none, "IN LockButton");
 			if (!!scope.changed) {
-				editorTracker.isLocked = isLocked;
+				EditorTracker.isLocked = isLocked;
 			}
 		}
 	}
