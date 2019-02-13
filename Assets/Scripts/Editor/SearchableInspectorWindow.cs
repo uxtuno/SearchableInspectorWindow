@@ -514,7 +514,7 @@ public class SearchableInspectorWindow : EditorWindow
 				continue;
 			}
 
-			if (property.displayName.Replace(' ', '\0').IndexOf(token, System.StringComparison.CurrentCultureIgnoreCase) >= 0) {
+			if (property.displayName.Replace(" ", "").IndexOf(token, System.StringComparison.CurrentCultureIgnoreCase) >= 0) {
 				return true;
 			}
 		}
